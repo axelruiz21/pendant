@@ -244,3 +244,39 @@ place where it is not.
 **Rejected.** Placeholder postconditions to satisfy the IR validator
 (exactly the "plausible guess" invariant 6 forbids); relaxing the IR
 validator for drafts (erodes the reliability contract everywhere).
+
+## D-014 — Tier 2/3 via injected content script, not CDP DOM/Runtime
+
+**Decision.** The collector enables CDP `Network` and `Page` only.
+Structure (identity vectors) and user events are reported by an injected
+content script (`pendant/capture/inject.js`) via
+`context.expose_binding`, not via CDP `DOM` / `Runtime` subscriptions.
+
+**Rationale.** Part II lists Network, DOM, Runtime, Page. For
+user-initiated events with a full identity vector, the DOM at event
+time is authoritative in the page; a content script attached with
+`isTrusted` filtering yields lower-latency, higher-fidelity vectors than
+reconstructing targets from CDP DOM snapshots after the fact. Network
+and Page remain on CDP for Tier 1 and navigations/dialogs.
+
+**Rejected.** Enabling unused DOM/Runtime domains "for completeness"
+(noise, no consumer); reconstructing vectors only from CDP (weaker
+accessible-name / trust filtering).
+
+## D-015 — Blank-hotkey epoch guards in-flight screenshots
+
+**Decision.** `Collector.blank_last` increments `_blank_epoch` before
+scrubbing. `_screenshot` captures the epoch at start and refuses to
+persist bytes / attach `screenshot_ref` if the epoch moved or the event
+already carries `blank-hotkey`. `Store.add_run` ingests only blobs
+whose digests appear as `screenshot_ref` on events.
+
+**Rationale.** Review found a race: blank could run while
+`page.screenshot` was in flight, then the completion handler wrote an
+immutable blob the hotkey never saw (invariant 3 / FMEA #1). Epoch +
+referenced-only ingest closes both the attach path and the orphan-file
+path.
+
+**Rejected.** Deferring all screenshots until `finalize` (loses
+mid-session reviewer evidence timing); ignoring the race as rare
+(severity 10, no waiver).

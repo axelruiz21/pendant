@@ -147,10 +147,20 @@ class Store:
         return [(r[0], r[1]) for r in rows]
 
     def add_run(self, process_id: str, trace: RunTrace, blob_dir: Path | None = None) -> None:
-        """Ingest one demonstration. Blobs referenced by events are copied in."""
+        """Ingest one demonstration. Only blobs referenced by events are copied.
+
+        Orphan files under blob_dir (e.g. a screenshot written after blank_last
+        raced and was later unlinked incompletely) must never enter the
+        content-addressed store — invariant 3, append-only corpus.
+        """
         if blob_dir is not None:
+            referenced = {
+                e.screenshot_ref.removeprefix("sha256:")
+                for e in trace.events
+                if e.screenshot_ref
+            }
             for blob in sorted(blob_dir.glob("*")):
-                if blob.is_file():
+                if blob.is_file() and blob.stem in referenced:
                     self.put_blob(blob.read_bytes())
         with self._conn:
             self._conn.execute(

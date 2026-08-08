@@ -68,6 +68,9 @@ class Collector:
         self._pending_requests: dict[str, dict[str, Any]] = {}
         self._awaiting_body: dict[str, dict[str, Any]] = {}
         self._network_tasks: set[asyncio.Task[None]] = set()
+        # Incremented by blank_last so in-flight screenshot tasks discard
+        # their bytes instead of writing after a scrub (invariant 3).
+        self._blank_epoch: int = 0
         self.blob_dir = out_dir / "blobs"
 
     # -- lifecycle ---------------------------------------------------------
@@ -353,6 +356,7 @@ class Collector:
     async def _screenshot(self, event: Event) -> None:
         if self._page is None:
             return
+        epoch_at_start = self._blank_epoch
         try:
             mask = [self._page.locator(", ".join(self.registry.mask_selectors()))]
             data = await self._page.screenshot(
@@ -360,6 +364,17 @@ class Collector:
             )
         except Exception:
             return  # mid-navigation; evidence screenshot is best-effort
+        # Discard if a blank ran while we were capturing, or if the event
+        # was already marked blank-hotkey before we finish attaching.
+        if epoch_at_start != self._blank_epoch:
+            return
+        for buffered in self.events:
+            if buffered.event_id == event.event_id:
+                if "blank-hotkey" in buffered.redactions:
+                    return
+                break
+        else:
+            return  # event gone (should not happen); do not write orphan bytes
         digest = _sha256(data)
         self.blob_dir.mkdir(parents=True, exist_ok=True)
         blob_path = self.blob_dir / f"{digest.removeprefix('sha256:')}.png"
@@ -367,6 +382,20 @@ class Collector:
             blob_path.write_bytes(data)
         for i, buffered in enumerate(self.events):
             if buffered.event_id == event.event_id:
+                # Re-check after the write race window: blank may have landed.
+                if (
+                    epoch_at_start != self._blank_epoch
+                    or "blank-hotkey" in buffered.redactions
+                ):
+                    if blob_path.exists():
+                        still_referenced = any(
+                            other.screenshot_ref == digest
+                            and other.event_id != event.event_id
+                            for other in self.events
+                        )
+                        if not still_referenced:
+                            blob_path.unlink(missing_ok=True)
+                    return
                 self.events[i] = buffered.model_copy(update={"screenshot_ref": digest})
                 break
 
@@ -380,7 +409,12 @@ class Collector:
     # -- operator hotkey ---------------------------------------------------------
 
     def blank_last(self, seconds: float) -> int:
-        """Blank values and screenshots captured in the last N seconds."""
+        """Blank values and screenshots captured in the last N seconds.
+
+        Bumps ``_blank_epoch`` first so any in-flight screenshot task started
+        before this call refuses to persist bytes (invariant 3).
+        """
+        self._blank_epoch += 1
         cutoff = self._now_ms() - seconds * 1000.0
         blanked = 0
         for i, event in enumerate(self.events):

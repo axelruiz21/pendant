@@ -19,7 +19,7 @@ from pendant.align import align_runs
 from pendant.capture.collector import Collector
 from pendant.capture.gate0 import render_report, run_gate0
 from pendant.capture.redaction import RedactionRegistry
-from pendant.induce.engine import AnthropicProvider, induce, log_corrections
+from pendant.induce.engine import AnthropicProvider, InductionFailed, induce, log_corrections
 from pendant.ir.graph import render_text
 from pendant.store import Store
 
@@ -130,7 +130,11 @@ def cmd_induce(args: argparse.Namespace) -> int:
     ]
     provider = AnthropicProvider(model=args.model)
     metrics_path = store.root / "induce_metrics.jsonl"
-    process, metrics = induce(report, narration, provider, metrics_path=metrics_path)
+    try:
+        process, metrics = induce(report, narration, provider, metrics_path=metrics_path)
+    except InductionFailed as exc:
+        print(f"induce failed: {exc}", file=sys.stderr)
+        return 1
     print(json.dumps(json.loads(process.model_dump_json()), indent=2))
     print(
         f"\n# attempts={metrics.attempts} first_pass={metrics.schema_first_pass} "
@@ -140,9 +144,18 @@ def cmd_induce(args: argparse.Namespace) -> int:
         file=sys.stderr,
     )
     if args.save_envelope:
-        version = (store.latest_version(args.process) or 0) + 1
-        envelope = process.to_envelope(args.process, version=version)
-        store.save_envelope(envelope)
+        try:
+            version = (store.latest_version(args.process) or 0) + 1
+            envelope = process.to_envelope(args.process, version=version)
+            store.save_envelope(envelope)
+        except ValueError as exc:
+            print(
+                f"refusing to save IR envelope: {exc}\n"
+                "Resolve null postcondition proposals (or keep the induced JSON) "
+                "before --save-envelope.",
+                file=sys.stderr,
+            )
+            return 1
         print(f"saved IR envelope {args.process} v{version} (draft)", file=sys.stderr)
     return 0
 

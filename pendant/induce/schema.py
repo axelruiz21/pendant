@@ -67,6 +67,18 @@ class InducedStep(BaseModel):
     provenance: list[str] = Field(default_factory=list)
     confidence: float = Field(ge=0.0, le=1.0)
 
+    @model_validator(mode="after")
+    def _irreversible_forces_approval(self) -> InducedStep:
+        # Mirror IR invariant 15 / D-005: do not paper over an explicit false.
+        if self.risk == "irreversible" and not self.approval_required:
+            if "approval_required" in self.model_fields_set:
+                raise ValueError(
+                    "risk='irreversible' requires approval_required=true; "
+                    "explicit false is a contradiction (invariant 15)"
+                )
+            self.approval_required = True
+        return self
+
     @property
     def has_proposed_postcondition(self) -> bool:
         return any(p.predicate is not None for p in self.proposed_postconditions)
