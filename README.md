@@ -68,9 +68,13 @@ uv run pendant induce --process orders --model file
 
 # Print the draft IR
 uv run pendant show --process orders
+
+# Execute the graph in assisted mode (D-017 prototype; approvals and
+# branch questions stop for you, secrets prompted without echo)
+uv run pendant run --process orders --allow-draft --param base_url=https://example.com
 ```
 
-CLI commands: `record`, `runs`, `align`, `induce`, `show`, `capture-msa`, `coverage`, `log-corrections`.
+CLI commands: `record`, `runs`, `align`, `induce`, `show`, `run`, `capture-msa`, `coverage`, `log-corrections`.
 
 ## Architecture
 
@@ -88,6 +92,7 @@ capture → store → align → induce → ir → (review) → (compile) → (ru
 | `align/` | Deterministic MSA (Needleman–Wunsch, affine gaps)—never an LLM |
 | `induce/` | Schema-constrained LLM, any provider (Anthropic, OpenAI-compatible, file exchange); reject-and-retry; Gate 2 instrumentation |
 | `ir/` | Pydantic v2 reliability contract: mandatory postconditions + finite timeouts |
+| `run/` | Assisted runner prototype (D-017): executes the IR with approval stops, guard questions, fault policies |
 
 **Binding invariants** (never relaxed under schedule pressure): immutable evidence, deterministic alignment, in-collector redaction, identity-vector locators, no empty postconditions / unbounded waits, schema-validated LLM output. Full list: [CLAUDE.md](CLAUDE.md).
 

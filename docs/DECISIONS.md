@@ -315,3 +315,36 @@ stdlib-only stance stands; readable artifacts over adapter stacks);
 driving Cursor's UI by automation to fake an API (fragile, opaque);
 changing the default away from Anthropic (silently breaks recorded
 workflows and the committed rehearsal tooling).
+
+## D-017 — Assisted runner prototype (Phase 2 pulled forward)
+
+**Decision.** `pendant/run/` executes a stored `ProcessEnvelope` in a
+real browser (`pendant run`), ahead of the Phase 0 scope line. It is
+an ASSISTED prototype, not shadow-mode automation: `--allow-draft` is
+required for unreviewed graphs, Gate 3 is not claimed, and
+invariant 14's baseline requirement still blocks calling any of this
+"deployed". Semantics are taken directly from the IR: targets resolve
+from the identity vector strongest-dimension-first and must match
+exactly one element (else fault — never click a guess);
+postconditions are polled within the step's finite `timeout_ms`;
+`http_status` postconditions assert against the step's recorded
+network responses, not the UI; `approval_required` stops for the
+operator; branches follow a passing guard or surface the edge's
+`guard_question`; faults follow `on_fault`
+(retry/escalate/rollback/abort). Missing `{param}` values are asked
+interactively; names matching the redaction registry are prompted
+without echo and never written to the run report.
+
+**Rationale.** The operator needs a working end-to-end prototype on a
+real process this week; the IR already carries everything a runner
+needs (closed action catalog, mandatory postconditions and timeouts,
+risk/approval flags), so a thin executor stays inside the reliability
+contract instead of inventing one. Building it against the reference
+process first means it is qualified by tests before touching a real
+target.
+
+**Rejected.** Hand-compiling Playwright scripts per process (loses
+postconditions, approvals, and fault policies — exactly the parts
+that make the graph trustworthy); waiting for the full Phase 2
+compiler (not available this week); autonomous mode without approval
+stops (invariant 15 makes that a non-starter for a prototype).

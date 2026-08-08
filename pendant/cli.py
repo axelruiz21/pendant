@@ -22,6 +22,8 @@ from pendant.capture.redaction import RedactionRegistry
 from pendant.induce.engine import InductionFailed, induce, log_corrections
 from pendant.induce.providers import make_provider
 from pendant.ir.graph import render_text
+from pendant.ir.models import ProcessEnvelope
+from pendant.run import Runner, StdioConsole
 from pendant.store import Store
 
 
@@ -206,6 +208,59 @@ def cmd_coverage(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_run(args: argparse.Namespace) -> int:
+    if args.ir:
+        envelope = ProcessEnvelope.model_validate_json(
+            Path(args.ir).read_text(encoding="utf-8")
+        )
+        report_root = Path(args.ir).resolve().parent
+    elif args.process:
+        store = _store(args)
+        envelope = store.get_envelope(args.process, args.version)
+        report_root = store.root
+    else:
+        print("run needs --process (store) or --ir (envelope JSON file)", file=sys.stderr)
+        return 2
+    if envelope.review_state == "draft" and not args.allow_draft:
+        print(
+            "refusing to run a draft graph. Review it first (pendant show), then pass "
+            "--allow-draft to run the prototype anyway (Gate 3 is NOT claimed).",
+            file=sys.stderr,
+        )
+        return 2
+    params: dict[str, str] = {}
+    for pair in args.param or []:
+        if "=" not in pair:
+            print(f"--param must be NAME=VALUE, got {pair!r}", file=sys.stderr)
+            return 2
+        name, value = pair.split("=", 1)
+        params[name] = value
+    runner = Runner(
+        envelope,
+        StdioConsole(),
+        params,
+        headless=args.headless,
+        download_dir=report_root / "downloads",
+    )
+    report = asyncio.run(runner.run())
+    report_dir = report_root / "run_reports"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    report_path = Path(args.report_out) if args.report_out else (
+        report_dir / f"{envelope.process_id}-v{envelope.version}-{stamp}.json"
+    )
+    report_path.write_text(
+        json.dumps(report.to_dict(), indent=2) + "\n", encoding="utf-8"
+    )
+    ok_steps = sum(1 for r in report.results if r.outcome == "ok")
+    print(
+        f"\nrun {report.outcome}: {ok_steps}/{len(report.results)} steps ok "
+        f"({report.note or 'no faults'})"
+    )
+    print(f"report: {report_path}")
+    return 0 if report.outcome == "completed" else 1
+
+
 def cmd_log_corrections(args: argparse.Namespace) -> int:
     store = _store(args)
     per_10 = log_corrections(
@@ -275,6 +330,25 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("coverage", help="Good-Turing demonstration sufficiency")
     p.add_argument("--process", required=True)
     p.set_defaults(func=cmd_coverage)
+
+    p = sub.add_parser(
+        "run", help="execute a stored IR graph in assisted mode (D-017 prototype)"
+    )
+    p.add_argument("--process")
+    p.add_argument("--version", type=int)
+    p.add_argument("--ir", help="run an envelope JSON file instead of the store")
+    p.add_argument(
+        "--param",
+        action="append",
+        metavar="NAME=VALUE",
+        help="run parameter; secrets are better left out (the runner prompts without echo)",
+    )
+    p.add_argument("--headless", action="store_true")
+    p.add_argument(
+        "--allow-draft", action="store_true", help="run a draft (unreviewed) graph anyway"
+    )
+    p.add_argument("--report-out", help="path for the run report JSON")
+    p.set_defaults(func=cmd_run)
 
     p = sub.add_parser(
         "log-corrections", help="record operator corrections counted in review"
