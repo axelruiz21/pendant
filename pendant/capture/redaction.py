@@ -13,8 +13,9 @@ un-leaked, so nothing secret may ever reach disk. Layers:
 3. Header names (Authorization, Cookie, ...) are never persisted;
    the Event schema has no header field, and request/response body
    hashes are computed over registry-redacted bodies.
-4. URL query parameters with secret-looking names are redacted in
-   navigate payloads.
+4. URL query parameters (and query-shaped fragments, e.g. OAuth
+   implicit-flow callbacks) with secret-looking names are redacted in
+   navigate payloads — by exact registry name or field-pattern match.
 5. Screenshot masking selectors are derived from the same registry.
 """
 
@@ -121,20 +122,33 @@ class RedactionRegistry(BaseModel):
         return None
 
     def redact_url(self, url: str) -> tuple[str, list[str]]:
-        """Replace values of secret-looking query params."""
+        """Replace values of secret-looking query params and fragment pairs."""
         parts = urlsplit(url)
-        if not parts.query:
+        if not parts.query and not parts.fragment:
             return url, []
         redactions: list[str] = []
+        if parts.query:
+            parts = parts._replace(query=self._redact_pairs(parts.query, "url-param", redactions))
+        # Fragments never reach the server but do reach the trace (OAuth
+        # implicit flow puts tokens there); plain anchors parse to no pairs.
+        if parts.fragment and parse_qsl(parts.fragment):
+            parts = parts._replace(
+                fragment=self._redact_pairs(parts.fragment, "url-fragment", redactions)
+            )
+        return urlunsplit(parts), redactions
+
+    def _redact_pairs(self, encoded: str, label: str, redactions: list[str]) -> str:
         pairs: list[tuple[str, str]] = []
-        for key, value in parse_qsl(parts.query, keep_blank_values=True):
-            if key.lower() in self.secret_query_params:
+        for key, value in parse_qsl(encoded, keep_blank_values=True):
+            # Exact registry names catch short keys ("sid", "key"); the
+            # field patterns catch the long tail ("access_token", "ssn")
+            # exactly as the urlencoded-body path already does.
+            if key.lower() in self.secret_query_params or self.match_field(key):
                 pairs.append((key, REDACTED))
-                redactions.append(f"url-param:{key}")
+                redactions.append(f"{label}:{key}")
             else:
                 pairs.append((key, value))
-        redacted = urlunsplit(parts._replace(query=urlencode(pairs)))
-        return redacted, redactions
+        return urlencode(pairs)
 
     def redact_body(self, body: str, content_type: str | None) -> tuple[str, list[str]]:
         """Redact registry-matching values inside a request/response body.
@@ -148,6 +162,10 @@ class RedactionRegistry(BaseModel):
             try:
                 parsed = json.loads(body)
             except ValueError:
+                return self._redact_flat_text(body)
+            if not isinstance(parsed, dict | list):
+                # Scalar JSON ("...", 42) has no field identity to
+                # address, so it gets the opaque treatment.
                 return self._redact_flat_text(body)
             redactions: list[str] = []
             cleaned = self._redact_json(parsed, redactions)
@@ -170,7 +188,10 @@ class RedactionRegistry(BaseModel):
         if isinstance(node, dict):
             out: dict[str, object] = {}
             for key, value in node.items():
-                if isinstance(value, str | int | float) and self.match_field(str(key)):
+                # A matching key redacts the ENTIRE value, containers
+                # included: {"api_key": ["sk-..."]} must not leak via
+                # recursion into keyless list elements.
+                if self.match_field(str(key)):
                     out[key] = REDACTED
                     redactions.append(f"body-field:{key}")
                 else:
