@@ -85,13 +85,15 @@ Predicate = {
 | url_matches     | `pattern` (regex, str)                    | page URL          |
 | element_visible | `target` (TargetVector)                   | DOM               |
 | text_matches    | `target` (TargetVector), `pattern` (str)  | DOM               |
-| http_status     | `url_template` (str), `status` (int)      | network (Tier 1)  |
+| http_status     | `url_template` (str), `status` (int); optional `method` (str, uppercase HTTP verb) | network (Tier 1)  |
 | row_count       | `target` (TargetVector), `op` in {eq,ge,le}, `value` (int) | DOM |
 | value_equals    | `target` (TargetVector), `value` (str)    | DOM               |
 | file_exists     | `path_template` (str)                     | filesystem        |
 
 `args` is validated per-kind: missing or extraneous keys are schema
-errors. Per invariant 11, prefer `http_status` (system-of-record
+errors. `http_status.method`, when present, pins the evidence to that
+HTTP verb so an unrelated background GET cannot satisfy a
+postcondition meant for a POST; prefer stating it on write steps. Per invariant 11, prefer `http_status` (system-of-record
 evidence) over `element_visible`/`text_matches` (the interface's
 opinion) whenever Tier 1 evidence makes one reachable; the inductor
 must flag UI-only postconditions as `weak`.
@@ -214,6 +216,27 @@ them from birth. Promotion past `draft` is refused while
 (default 0.10) — enforced in `store/`, mirrored by an envelope
 validator so a hand-edited document cannot claim `reviewed` with
 insufficient coverage evidence.
+
+### 2.8 Run-time parameter placeholders (D-018)
+
+String values inside `Action.params` and `Predicate.args` may embed
+`{parameter_name}` placeholders, bound at run time from
+operator-supplied values. The convention is normative:
+
+- A placeholder name matches `[a-zA-Z_][a-zA-Z0-9_]*` — it must start
+  with a letter or underscore, so regex quantifiers such as `\d{4}`
+  inside `url_matches`/`text_matches` patterns are never treated as
+  placeholders.
+- Every placeholder used in a step must correspond to a declared
+  entry in the envelope's `parameter_signature` with that exact name.
+  The inductor is required to emit placeholders (never demonstration
+  literals, never machine tokens like `{p0}`) wherever a declared
+  parameter's value flows into an action or predicate, and induction
+  cross-validation rejects undeclared placeholders.
+- The runner resolves placeholders from `--param NAME=VALUE` flags or
+  by prompting the operator; names matching the redaction registry
+  are prompted without echo and their values are redacted from all
+  run output (invariant 3).
 
 ## 3. Serialization
 

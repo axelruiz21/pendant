@@ -158,3 +158,23 @@ class TestInduce:
         unresolved = InducedProcess.model_validate(payload)
         with pytest.raises(ValueError, match="without resolved postconditions"):
             unresolved.to_envelope("proc-test")
+
+
+class TestPlaceholderValidation:
+    """Placeholders must name declared parameters (D-018)."""
+
+    def test_undeclared_placeholder_rejected(self, report: AlignmentReport) -> None:
+        payload = build_valid_payload(report)
+        payload["steps"][0]["action"]["params"] = {"url": "https://x/orders/{order_id}"}
+        provider = ReplayProvider([json.dumps(payload)] * 3)
+        with pytest.raises(InductionFailed, match="placeholder"):
+            induce(report, [], provider)
+
+    def test_declared_placeholder_accepted(self, report: AlignmentReport) -> None:
+        payload = build_valid_payload(report)
+        payload["steps"][0]["action"]["params"] = {"url": "https://x/orders/{order_id}"}
+        payload["parameters"] = [{"name": "order_id", "value_class": "string"}]
+        provider = ReplayProvider([json.dumps(payload)])
+        process, metrics = induce(report, [], provider)
+        assert metrics.schema_first_pass is True
+        assert process.parameters[0].name == "order_id"

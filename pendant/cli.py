@@ -209,14 +209,27 @@ def cmd_coverage(args: argparse.Namespace) -> int:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
+    from pydantic import ValidationError
+
     if args.ir:
-        envelope = ProcessEnvelope.model_validate_json(
-            Path(args.ir).read_text(encoding="utf-8")
-        )
+        try:
+            envelope = ProcessEnvelope.model_validate_json(
+                Path(args.ir).read_text(encoding="utf-8")
+            )
+        except OSError as exc:
+            print(f"cannot read --ir file: {exc}", file=sys.stderr)
+            return 2
+        except ValidationError as exc:
+            print(f"--ir file is not a valid ProcessEnvelope:\n{exc}", file=sys.stderr)
+            return 2
         report_root = Path(args.ir).resolve().parent
     elif args.process:
         store = _store(args)
-        envelope = store.get_envelope(args.process, args.version)
+        try:
+            envelope = store.get_envelope(args.process, args.version)
+        except KeyError as exc:
+            print(f"no stored IR: {exc.args[0]}", file=sys.stderr)
+            return 2
         report_root = store.root
     else:
         print("run needs --process (store) or --ir (envelope JSON file)", file=sys.stderr)
@@ -243,12 +256,11 @@ def cmd_run(args: argparse.Namespace) -> int:
         download_dir=report_root / "downloads",
     )
     report = asyncio.run(runner.run())
-    report_dir = report_root / "run_reports"
-    report_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     report_path = Path(args.report_out) if args.report_out else (
-        report_dir / f"{envelope.process_id}-v{envelope.version}-{stamp}.json"
+        report_root / "run_reports" / f"{envelope.process_id}-v{envelope.version}-{stamp}.json"
     )
+    report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(
         json.dumps(report.to_dict(), indent=2) + "\n", encoding="utf-8"
     )

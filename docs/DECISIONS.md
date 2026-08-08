@@ -318,6 +318,14 @@ workflows and the committed rehearsal tooling).
 
 ## D-017 — Assisted runner prototype (Phase 2 pulled forward)
 
+**Authorization.** CLAUDE.md Part VI forbids building the runner in
+Phase 0; this deviation was explicitly directed by the operator
+(session instruction, 2026-08-07: a working runner for real processes
+by Sunday). It is a sanctioned operator override of the scope line,
+recorded per Part VI's deviation discipline — not a schedule-pressure
+self-exemption by the implementer. The runner's failure modes are
+FMEA rows 14–18.
+
 **Decision.** `pendant/run/` executes a stored `ProcessEnvelope` in a
 real browser (`pendant run`), ahead of the Phase 0 scope line. It is
 an ASSISTED prototype, not shadow-mode automation: `--allow-draft` is
@@ -348,3 +356,31 @@ postconditions, approvals, and fault policies — exactly the parts
 that make the graph trustworthy); waiting for the full Phase 2
 compiler (not available this week); autonomous mode without approval
 stops (invariant 15 makes that a non-starter for a prototype).
+
+## D-018 — Run-time parameter placeholder convention (IR-level)
+
+**Decision.** `{parameter_name}` placeholders in string values of
+`Action.params` and `Predicate.args` are a normative IR convention
+(docs/IR.md §2.8): names match `[a-zA-Z_][a-zA-Z0-9_]*` (so regex
+quantifiers like `\d{4}` are never placeholders), every placeholder
+must name a declared `parameter_signature` entry, the inductor is
+instructed to emit placeholders instead of demonstration literals or
+machine `{p0}` tokens, and induction cross-validation rejects
+undeclared placeholders. `http_status` additionally accepts an
+optional `method` arg pinning evidence to an HTTP verb. The shared
+regex and helper live in `pendant/ir/models.py`
+(`PLACEHOLDER_RE`, `placeholder_names`); the runner and inductor both
+consume them.
+
+**Rationale.** The D-017 review found the runner's binding convention
+had no producer: capture emits `{p0}` machine tokens and the
+induction prompt never taught placeholder syntax, so parameters on
+real induced graphs were frozen demonstration literals. A binding
+convention is an IR contract between inductor and runner, so it is
+specified at the IR level and enforced at induction time, not
+invented ad hoc in the executor.
+
+**Rejected.** Keeping `{p0}` machine names end-to-end (opaque to the
+operator at prompt time and in review); positional parameter binding
+(unreadable IR documents); leaving the convention runner-local
+(exactly the producer/consumer mismatch the review caught).

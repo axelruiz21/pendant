@@ -15,6 +15,7 @@ schema level (validation errors, never warnings):
 
 from __future__ import annotations
 
+import re
 from typing import Any, Literal
 
 from pydantic import (
@@ -26,6 +27,32 @@ from pydantic import (
 )
 
 IR_SCHEMA_VERSION = "0.1"
+
+# Run-time parameter placeholder convention (docs/IR.md §2.8, D-018):
+# string values in Action.params and Predicate.args may embed
+# {parameter_name} placeholders bound at run time. Names must start
+# with a letter/underscore so regex quantifiers like \d{4} inside
+# url_matches/text_matches patterns are never mistaken for
+# placeholders.
+PLACEHOLDER_RE = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
+
+
+def placeholder_names(value: object) -> set[str]:
+    """Collect placeholder names from a string, or from string values
+    nested in dicts/lists (as found in Action.params / Predicate.args)."""
+    if isinstance(value, str):
+        return set(PLACEHOLDER_RE.findall(value))
+    if isinstance(value, dict):
+        names: set[str] = set()
+        for v in value.values():
+            names |= placeholder_names(v)
+        return names
+    if isinstance(value, list):
+        names = set()
+        for v in value:
+            names |= placeholder_names(v)
+        return names
+    return set()
 
 # Mirror of the store's default Good-Turing promotion threshold
 # (invariant 9). The store enforces its configured value at promotion
@@ -126,6 +153,14 @@ _PREDICATE_ARG_KEYS: dict[str, frozenset[str]] = {
     "file_exists": frozenset({"path_template"}),
 }
 
+# Optional args per kind. http_status may pin the HTTP method so a
+# background GET cannot satisfy a postcondition meant for a POST.
+_PREDICATE_OPT_KEYS: dict[str, frozenset[str]] = {
+    "http_status": frozenset({"method"}),
+}
+
+_HTTP_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"})
+
 
 class Predicate(_IRModel):
     """A verifiable assertion; args validated per kind (docs/IR.md §2.1)."""
@@ -137,11 +172,12 @@ class Predicate(_IRModel):
     @model_validator(mode="after")
     def _validate_args_for_kind(self) -> Predicate:
         required = _PREDICATE_ARG_KEYS[self.kind]
+        optional = _PREDICATE_OPT_KEYS.get(self.kind, frozenset())
         got = set(self.args)
-        if got != required:
+        if not (required <= got <= required | optional):
             raise ValueError(
-                f"predicate kind={self.kind!r} requires args {sorted(required)}, "
-                f"got {sorted(got)}"
+                f"predicate kind={self.kind!r} requires args {sorted(required)} "
+                f"(optional: {sorted(optional)}), got {sorted(got)}"
             )
         match self.kind:
             case "url_matches":
@@ -154,6 +190,12 @@ class Predicate(_IRModel):
             case "http_status":
                 _require_str(self.args, "url_template", self.kind)
                 _require_int(self.args, "status", self.kind)
+                if "method" in self.args:
+                    _require_str(self.args, "method", self.kind)
+                    if self.args["method"].upper() not in _HTTP_METHODS:
+                        raise ValueError(
+                            f"http_status arg 'method' must be one of {sorted(_HTTP_METHODS)}"
+                        )
             case "row_count":
                 _require_target(self.args, self.kind)
                 _require_int(self.args, "value", self.kind)

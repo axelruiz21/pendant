@@ -2,8 +2,12 @@
 
 Each IR predicate kind maps to one observable check. `http_status`
 asserts against Tier 1 evidence: the runner records network responses
-per step and the predicate matches the system-of-record call, not a
-UI toast.
+per action window and the predicate matches the system-of-record call
+(optionally pinned to an HTTP method), not a UI toast.
+
+Evaluation failures are converted by the executor into step faults —
+a predicate that raises must never crash the run (review finding,
+D-017 hardening).
 """
 
 from __future__ import annotations
@@ -14,34 +18,47 @@ from pathlib import Path
 
 from playwright.async_api import Page
 
-from pendant.ir.models import Predicate, TargetVector
+from pendant.ir.models import PLACEHOLDER_RE, Predicate, TargetVector
 from pendant.run.resolver import ResolutionError, resolve_target
+
+# Bound for individual Playwright read calls inside a predicate check;
+# the step's own deadline governs the overall wait, this only stops a
+# single call (e.g. inner_text on a detached element) from blocking
+# past it on Playwright's 30s default.
+DEFAULT_CALL_TIMEOUT_MS = 2_000.0
 
 
 @dataclass
 class ResponseRecord:
     url: str
     status: int
+    method: str
 
 
 @dataclass
 class EvalContext:
-    """What a predicate may observe: the page, this step's network
-    window, resolved run parameters, and the downloads directory."""
+    """What a predicate may observe: the page, the current action's
+    network window, resolved run parameters, and a per-call timeout
+    budget for browser reads."""
 
     page: Page
     responses: list[ResponseRecord] = field(default_factory=list)
     params: dict[str, str] = field(default_factory=dict)
-    download_dir: Path | None = None
+    call_timeout_ms: float = DEFAULT_CALL_TIMEOUT_MS
 
 
 def resolve_template(template: str, params: dict[str, str]) -> str:
-    """Fill {name} placeholders; unknown names raise KeyError('name')."""
+    """Fill {name} placeholders; unknown names raise KeyError('name').
+
+    Placeholder names must start with a letter or underscore
+    (PLACEHOLDER_RE, docs/IR.md §2.7), so regex quantifiers like
+    `\\d{4}` in url_matches/text_matches patterns pass through intact.
+    """
 
     def _sub(match: re.Match[str]) -> str:
         return params[match.group(1)]
 
-    return re.sub(r"\{([a-zA-Z0-9_]+)\}", _sub, template)
+    return PLACEHOLDER_RE.sub(_sub, template)
 
 
 def _target_of(args: dict[str, object]) -> TargetVector:
@@ -53,6 +70,7 @@ def _target_of(args: dict[str, object]) -> TargetVector:
 
 async def _evaluate_positive(predicate: Predicate, ctx: EvalContext) -> bool:
     args = predicate.args
+    timeout = ctx.call_timeout_ms
     match predicate.kind:
         case "url_matches":
             pattern = resolve_template(str(args["pattern"]), ctx.params)
@@ -69,13 +87,17 @@ async def _evaluate_positive(predicate: Predicate, ctx: EvalContext) -> bool:
             except ResolutionError:
                 return False
             pattern = resolve_template(str(args["pattern"]), ctx.params)
-            text = await locator.inner_text()
+            text = await locator.inner_text(timeout=timeout)
             return re.search(pattern, text) is not None
         case "http_status":
             url_part = resolve_template(str(args["url_template"]), ctx.params)
             expected = int(str(args["status"]))
+            method = str(args["method"]).upper() if "method" in args else None
             return any(
-                url_part in r.url and r.status == expected for r in ctx.responses
+                url_part in r.url
+                and r.status == expected
+                and (method is None or r.method == method)
+                for r in ctx.responses
             )
         case "row_count":
             try:
@@ -97,7 +119,7 @@ async def _evaluate_positive(predicate: Predicate, ctx: EvalContext) -> bool:
             except ResolutionError:
                 return False
             expected_value = resolve_template(str(args["value"]), ctx.params)
-            return await locator.input_value() == expected_value
+            return await locator.input_value(timeout=timeout) == expected_value
         case "file_exists":
             path = Path(resolve_template(str(args["path_template"]), ctx.params))
             return path.exists()

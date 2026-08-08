@@ -38,7 +38,14 @@ process into a draft automation program. Hard rules:
    corresponding branch edges must carry guard_question, NOT a guessed
    guard predicate.
 4. Parameterized columns become process parameters; name them from the
-   narration when possible.
+   narration when possible. Wherever a parameter's value flows into an
+   action param (url, value, url_template, path_template) or a
+   predicate arg, write it as a {parameter_name} placeholder using the
+   declared parameter's exact name — never the concrete value observed
+   in the demonstrations, and never machine tokens like {p0}: rename
+   those to the declared parameter they correspond to. Every
+   placeholder you emit must match a declared parameter name; the run
+   time binds them from operator-supplied values.
 5. timeout_ms must be a finite positive integer chosen per step.
    Steps that write to the system of record are risk "write";
    destructive or non-reversible effects are "irreversible".

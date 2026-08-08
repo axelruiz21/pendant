@@ -305,3 +305,32 @@ class TestEnvelope:
         assert "[s1] Submit the order form" in text
         assert "timeout: 10000 ms" in text
         assert "coverage: not yet estimated" in text
+
+
+class TestHttpStatusMethodArg:
+    """Optional method pin on http_status (D-018, D-017 review)."""
+
+    def test_method_accepted(self) -> None:
+        p = Predicate(
+            kind="http_status",
+            args={"url_template": "/api/orders", "status": 201, "method": "POST"},
+        )
+        assert p.args["method"] == "POST"
+
+    def test_invalid_method_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="method"):
+            Predicate(
+                kind="http_status",
+                args={"url_template": "/api/orders", "status": 201, "method": "YEET"},
+            )
+
+    def test_extraneous_arg_still_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="requires args"):
+            Predicate(
+                kind="http_status",
+                args={"url_template": "/x", "status": 200, "verb": "POST"},
+            )
+
+    def test_method_not_valid_on_other_kinds(self) -> None:
+        with pytest.raises(ValidationError, match="requires args"):
+            Predicate(kind="url_matches", args={"pattern": "x", "method": "GET"})

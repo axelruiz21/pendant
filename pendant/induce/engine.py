@@ -20,6 +20,7 @@ from pendant.align.report import AlignmentReport
 from pendant.induce.prompt import build_prompt, build_retry_prompt
 from pendant.induce.providers import LLMProvider
 from pendant.induce.schema import InducedProcess
+from pendant.ir.models import placeholder_names
 
 
 class InductionFailed(Exception):
@@ -60,6 +61,20 @@ def _conditional_region_count(report: AlignmentReport) -> int:
 
 def _cross_validate(process: InducedProcess, report: AlignmentReport) -> None:
     """Checks beyond the schema: evidence discipline (invariant 6)."""
+    declared = {p.name for p in process.parameters}
+    for step in process.steps:
+        used = placeholder_names(step.action.params)
+        for proposal in step.proposed_postconditions:
+            if proposal.predicate is not None:
+                used |= placeholder_names(proposal.predicate.args)
+        undeclared = sorted(used - declared)
+        if undeclared:
+            raise ValueError(
+                f"step {step.id!r} uses placeholder(s) {undeclared} that are not "
+                "declared process parameters; declare each as a parameter with "
+                "that exact name (rename machine tokens like {p0} to the "
+                "operator-meaningful parameter they correspond to)"
+            )
     known_events = {cell.event_id for col in report.columns for cell in col.cells}
     for step in process.steps:
         phantom = [e for e in step.provenance if e not in known_events]
