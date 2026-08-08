@@ -1,0 +1,59 @@
+{
+  "scenario": "s7_event_drops",
+  "description": "Identical process; one run is missing a single event (simulated capture drop).",
+  "runs": [
+    "s7-run1.ndjson",
+    "s7-run2.ndjson"
+  ],
+  "expected_columns": [
+    {
+      "token": "navigate|||https://orders.acme.test/login",
+      "class": "invariant"
+    },
+    {
+      "token": "input|textbox|Username|https://orders.acme.test/login",
+      "class": "invariant"
+    },
+    {
+      "token": "click|button|Sign in|https://orders.acme.test/login",
+      "class": "invariant"
+    },
+    {
+      "token": "network|||https://orders.acme.test/api/login",
+      "class": "invariant"
+    },
+    {
+      "token": "navigate|||https://orders.acme.test/orders/new",
+      "class": "invariant"
+    },
+    {
+      "token": "input|textbox|Customer name|https://orders.acme.test/orders/new",
+      "class": "invariant"
+    },
+    {
+      "token": "input|textbox|Quantity|https://orders.acme.test/orders/new",
+      "class": "invariant"
+    },
+    {
+      "token": "key||Enter|",
+      "class": "invariant"
+    },
+    {
+      "token": "click|button|Create order|https://orders.acme.test/orders/new",
+      "class": "invariant"
+    },
+    {
+      "token": "network|||https://orders.acme.test/api/orders",
+      "class": "invariant"
+    },
+    {
+      "token": "network|||https://orders.acme.test/api/orders/{p0}",
+      "class": "conditional"
+    },
+    {
+      "token": "click|button|Done|https://orders.acme.test/orders/new",
+      "class": "invariant"
+    }
+  ],
+  "notes": "At evidence level a dropped event is indistinguishable from a conditional, so the expected class is conditional; the defect seeded here is misalignment of neighbors."
+}

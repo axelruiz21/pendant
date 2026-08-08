@@ -1,0 +1,60 @@
+{
+  "scenario": "s4_unordered",
+  "description": "Three fills with identical values entered in a different order in every run.",
+  "runs": [
+    "s4-run1.ndjson",
+    "s4-run2.ndjson",
+    "s4-run3.ndjson"
+  ],
+  "expected_columns": [
+    {
+      "token": "navigate|||https://orders.acme.test/login",
+      "class": "invariant"
+    },
+    {
+      "token": "input|textbox|Username|https://orders.acme.test/login",
+      "class": "invariant"
+    },
+    {
+      "token": "click|button|Sign in|https://orders.acme.test/login",
+      "class": "invariant"
+    },
+    {
+      "token": "network|||https://orders.acme.test/api/login",
+      "class": "invariant"
+    },
+    {
+      "token": "navigate|||https://orders.acme.test/orders/new",
+      "class": "invariant"
+    },
+    {
+      "token": "input|textbox|Shipping address|https://orders.acme.test/orders/new",
+      "class": "unordered"
+    },
+    {
+      "token": "input|textbox|Billing address|https://orders.acme.test/orders/new",
+      "class": "unordered"
+    },
+    {
+      "token": "input|textbox|Contact email|https://orders.acme.test/orders/new",
+      "class": "unordered"
+    },
+    {
+      "token": "click|button|Create order|https://orders.acme.test/orders/new",
+      "class": "invariant"
+    },
+    {
+      "token": "network|||https://orders.acme.test/api/orders",
+      "class": "invariant"
+    },
+    {
+      "token": "network|||https://orders.acme.test/api/orders/{p0}",
+      "class": "parameterized"
+    },
+    {
+      "token": "click|button|Done|https://orders.acme.test/orders/new",
+      "class": "invariant"
+    }
+  ],
+  "notes": "Unordered region order in expected_columns follows run 1; the harness treats the unordered group as order-insensitive."
+}

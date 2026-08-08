@@ -1,0 +1,59 @@
+{
+  "scenario": "s3_repeated_steps",
+  "description": "Identical 'Add line' clicked 3x vs 2x: alignment ambiguity among identical tokens.",
+  "runs": [
+    "s3-run1.ndjson",
+    "s3-run2.ndjson"
+  ],
+  "expected_columns": [
+    {
+      "token": "navigate|||https://orders.acme.test/login",
+      "class": "invariant"
+    },
+    {
+      "token": "input|textbox|Username|https://orders.acme.test/login",
+      "class": "invariant"
+    },
+    {
+      "token": "click|button|Sign in|https://orders.acme.test/login",
+      "class": "invariant"
+    },
+    {
+      "token": "network|||https://orders.acme.test/api/login",
+      "class": "invariant"
+    },
+    {
+      "token": "navigate|||https://orders.acme.test/orders/new",
+      "class": "invariant"
+    },
+    {
+      "token": "click|button|Add line|https://orders.acme.test/orders/new",
+      "class": "invariant"
+    },
+    {
+      "token": "click|button|Add line|https://orders.acme.test/orders/new",
+      "class": "invariant"
+    },
+    {
+      "token": "click|button|Add line|https://orders.acme.test/orders/new",
+      "class": "conditional"
+    },
+    {
+      "token": "click|button|Create order|https://orders.acme.test/orders/new",
+      "class": "invariant"
+    },
+    {
+      "token": "network|||https://orders.acme.test/api/orders",
+      "class": "parameterized"
+    },
+    {
+      "token": "network|||https://orders.acme.test/api/orders/{p0}",
+      "class": "parameterized"
+    },
+    {
+      "token": "click|button|Done|https://orders.acme.test/orders/new",
+      "class": "invariant"
+    }
+  ],
+  "notes": "Which of the three identical columns is the unmatched one is arbitrary; the harness compares class multisets within adjacent same-token groups."
+}

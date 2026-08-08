@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Acme Reference Portal — New Order</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 560px; margin: 3rem auto; }
+    label { display: block; margin-top: .9rem; font-weight: 600; }
+    input { display: block; width: 100%; padding: .45rem; margin-top: .2rem; box-sizing: border-box; }
+    button { margin-top: 1rem; margin-right: .5rem; padding: .5rem 1rem; }
+    .line { border-left: 3px solid #888; padding-left: .8rem; margin-top: .8rem; }
+    #confirmation { background: #e6f4ea; padding: 1rem; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>New order</h1>
+
+  <label for="customer">Customer name</label>
+  <input id="customer" name="customer" data-testid="customer" type="text">
+  <label for="quantity">Quantity</label>
+  <input id="quantity" name="quantity" data-testid="quantity" type="text">
+  <label for="po-number">PO number</label>
+  <input id="po-number" name="po-number" data-testid="po-number" type="text">
+
+  <div id="lines"></div>
+  <button id="add-line" data-testid="add-line" type="button">Add line</button>
+
+  <label for="shipping">Shipping address</label>
+  <input id="shipping" name="shipping" data-testid="shipping" type="text">
+  <label for="billing">Billing address</label>
+  <input id="billing" name="billing" data-testid="billing" type="text">
+  <label for="email">Contact email</label>
+  <input id="email" name="email" data-testid="email" type="text">
+  <label for="card-number">Card number</label>
+  <input id="card-number" name="card-number" data-testid="card-number" type="text" autocomplete="cc-number">
+  <label for="notes">Notes</label>
+  <input id="notes" name="notes" data-testid="notes" type="text">
+
+  <label for="discount-code">Discount code</label>
+  <input id="discount-code" name="discount-code" data-testid="discount-code" type="text">
+  <button id="apply-discount" data-testid="apply-discount" type="button">Apply discount</button>
+  <p id="discount-status"></p>
+
+  <button id="create-order" data-testid="create-order" type="button">Create order</button>
+  <div id="confirmation" hidden>
+    <p id="confirmation-text"></p>
+    <button id="done" data-testid="done" type="button">Done</button>
+  </div>
+  <button id="log-out" data-testid="log-out" type="button">Log out</button>
+
+  <script>
+    let lineCount = 0;
+    document.getElementById("add-line").addEventListener("click", () => {
+      lineCount += 1;
+      const div = document.createElement("div");
+      div.className = "line";
+      div.innerHTML = `<label for="sku-${lineCount}">Item SKU ${lineCount}</label>` +
+        `<input id="sku-${lineCount}" name="sku-${lineCount}" data-testid="sku-${lineCount}" type="text">`;
+      document.getElementById("lines").appendChild(div);
+    });
+
+    document.getElementById("apply-discount").addEventListener("click", async () => {
+      const code = document.getElementById("discount-code").value;
+      const res = await fetch(`/api/discount?code=${encodeURIComponent(code)}`);
+      const data = await res.json();
+      document.getElementById("discount-status").textContent = `Discount: ${data.percent}%`;
+    });
+
+    document.getElementById("create-order").addEventListener("click", async () => {
+      const skus = Array.from(document.querySelectorAll("[id^=sku-]")).map((el) => el.value);
+      const body = JSON.stringify({
+        customer: document.getElementById("customer").value,
+        quantity: document.getElementById("quantity").value,
+        po: document.getElementById("po-number").value,
+        skus,
+        shipping: document.getElementById("shipping").value,
+        billing: document.getElementById("billing").value,
+        email: document.getElementById("email").value,
+        card_number: document.getElementById("card-number").value,
+        notes: document.getElementById("notes").value,
+      });
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      const created = await res.json();
+      const detail = await fetch(`/api/orders/${created.id}`);
+      const order = await detail.json();
+      document.getElementById("confirmation-text").textContent =
+        `Order ${order.id} created, status ${order.status}, total ${order.total}.`;
+      document.getElementById("confirmation").hidden = false;
+    });
+
+    document.getElementById("done").addEventListener("click", () => {
+      document.getElementById("confirmation").hidden = true;
+    });
+
+    document.getElementById("log-out").addEventListener("click", async () => {
+      await fetch("/api/logout", { method: "POST" });
+      window.location.href = "/login.html";
+    });
+  </script>
+</body>
+</html>

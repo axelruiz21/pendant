@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Acme Reference Portal — Sign in</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 420px; margin: 4rem auto; }
+    label { display: block; margin-top: 1rem; font-weight: 600; }
+    input { display: block; width: 100%; padding: .5rem; margin-top: .25rem; box-sizing: border-box; }
+    button { margin-top: 1.5rem; padding: .6rem 1.2rem; }
+    .error { color: #b00020; }
+  </style>
+</head>
+<body>
+  <h1>Acme Reference Portal</h1>
+  <label for="username">Username</label>
+  <input id="username" name="username" data-testid="username" type="text" autocomplete="username">
+  <label for="password">Password</label>
+  <input id="password" name="password" data-testid="password" type="password" autocomplete="current-password">
+  <button id="sign-in" data-testid="sign-in" type="button">Sign in</button>
+  <p id="login-error" class="error" hidden>Sign-in failed.</p>
+  <script>
+    document.getElementById("sign-in").addEventListener("click", async () => {
+      const body = JSON.stringify({
+        username: document.getElementById("username").value,
+        password: document.getElementById("password").value,
+      });
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer fake-session-token" },
+        body,
+      });
+      if (res.ok) { window.location.href = "/orders.html"; }
+      else { document.getElementById("login-error").hidden = false; }
+    });
+  </script>
+</body>
+</html>

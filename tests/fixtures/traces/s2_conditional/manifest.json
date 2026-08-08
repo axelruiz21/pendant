@@ -1,0 +1,64 @@
+{
+  "scenario": "s2_conditional",
+  "description": "Approval dialog present in runs 1 and 3 only (quantity-driven guard, unknown to aligner).",
+  "runs": [
+    "s2-run1.ndjson",
+    "s2-run2.ndjson",
+    "s2-run3.ndjson"
+  ],
+  "expected_columns": [
+    {
+      "token": "navigate|||https://orders.acme.test/login",
+      "class": "invariant"
+    },
+    {
+      "token": "input|textbox|Username|https://orders.acme.test/login",
+      "class": "invariant"
+    },
+    {
+      "token": "click|button|Sign in|https://orders.acme.test/login",
+      "class": "invariant"
+    },
+    {
+      "token": "network|||https://orders.acme.test/api/login",
+      "class": "invariant"
+    },
+    {
+      "token": "navigate|||https://orders.acme.test/orders/new",
+      "class": "invariant"
+    },
+    {
+      "token": "input|textbox|Customer name|https://orders.acme.test/orders/new",
+      "class": "invariant"
+    },
+    {
+      "token": "input|textbox|Quantity|https://orders.acme.test/orders/new",
+      "class": "parameterized"
+    },
+    {
+      "token": "click|button|Create order|https://orders.acme.test/orders/new",
+      "class": "invariant"
+    },
+    {
+      "token": "dialog||Quantity exceeds 100 - approval required|",
+      "class": "conditional"
+    },
+    {
+      "token": "click|button|Approve anyway|https://orders.acme.test/orders/new",
+      "class": "conditional"
+    },
+    {
+      "token": "network|||https://orders.acme.test/api/orders",
+      "class": "parameterized"
+    },
+    {
+      "token": "network|||https://orders.acme.test/api/orders/{p0}",
+      "class": "parameterized"
+    },
+    {
+      "token": "click|button|Done|https://orders.acme.test/orders/new",
+      "class": "invariant"
+    }
+  ],
+  "notes": "The two conditional columns must NEVER be classified invariant (Gate 1 absolute)."
+}

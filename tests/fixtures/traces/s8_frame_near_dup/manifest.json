@@ -1,0 +1,51 @@
+{
+  "scenario": "s8_frame_near_dup",
+  "description": "Two 'Confirm payment' buttons identical in role and name, differing only in frame.",
+  "runs": [
+    "s8-run1.ndjson",
+    "s8-run2.ndjson"
+  ],
+  "expected_columns": [
+    {
+      "token": "navigate|||https://orders.acme.test/login",
+      "class": "invariant"
+    },
+    {
+      "token": "input|textbox|Username|https://orders.acme.test/login",
+      "class": "invariant"
+    },
+    {
+      "token": "click|button|Sign in|https://orders.acme.test/login",
+      "class": "invariant"
+    },
+    {
+      "token": "network|||https://orders.acme.test/api/login",
+      "class": "invariant"
+    },
+    {
+      "token": "navigate|||https://orders.acme.test/orders/new",
+      "class": "invariant"
+    },
+    {
+      "token": "click|button|Confirm payment|https://orders.acme.test/orders/new",
+      "class": "invariant"
+    },
+    {
+      "token": "input|textbox|Card holder|https://pay.acme.test/widget?merchant={merchant}",
+      "class": "invariant"
+    },
+    {
+      "token": "click|button|Confirm payment|https://pay.acme.test/widget?merchant={merchant}",
+      "class": "invariant"
+    },
+    {
+      "token": "network|||https://pay.acme.test/api/charge",
+      "class": "invariant"
+    },
+    {
+      "token": "click|button|Done|https://orders.acme.test/orders/new",
+      "class": "invariant"
+    }
+  ],
+  "notes": "Tokens must keep frame context: collapsing the two near-duplicates corrupts alignment."
+}

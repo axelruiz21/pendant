@@ -1,0 +1,60 @@
+{
+  "scenario": "s1_param_single",
+  "description": "One varying parameter (customer name) flowing through to Tier 1 evidence.",
+  "runs": [
+    "s1-run1.ndjson",
+    "s1-run2.ndjson",
+    "s1-run3.ndjson"
+  ],
+  "expected_columns": [
+    {
+      "token": "navigate|||https://orders.acme.test/login",
+      "class": "invariant"
+    },
+    {
+      "token": "input|textbox|Username|https://orders.acme.test/login",
+      "class": "invariant"
+    },
+    {
+      "token": "click|button|Sign in|https://orders.acme.test/login",
+      "class": "invariant"
+    },
+    {
+      "token": "network|||https://orders.acme.test/api/login",
+      "class": "invariant"
+    },
+    {
+      "token": "navigate|||https://orders.acme.test/orders/new",
+      "class": "invariant"
+    },
+    {
+      "token": "input|textbox|Customer name|https://orders.acme.test/orders/new",
+      "class": "parameterized"
+    },
+    {
+      "token": "input|textbox|Quantity|https://orders.acme.test/orders/new",
+      "class": "invariant"
+    },
+    {
+      "token": "key||Enter|",
+      "class": "invariant"
+    },
+    {
+      "token": "click|button|Create order|https://orders.acme.test/orders/new",
+      "class": "invariant"
+    },
+    {
+      "token": "network|||https://orders.acme.test/api/orders",
+      "class": "parameterized"
+    },
+    {
+      "token": "network|||https://orders.acme.test/api/orders/{p0}",
+      "class": "parameterized"
+    },
+    {
+      "token": "click|button|Done|https://orders.acme.test/orders/new",
+      "class": "invariant"
+    }
+  ],
+  "notes": "Narration event in run 1 must be excluded from alignment (tier 5)."
+}
