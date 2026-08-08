@@ -2,79 +2,24 @@
 
 Provider-independent: all validation, retry, and metrics logic is
 tested against a deterministic ReplayProvider; Gate 2 runs against a
-real provider (docs/DECISIONS.md D-009).
+real provider (docs/DECISIONS.md D-009). Provider implementations —
+Anthropic, any OpenAI-compatible endpoint, manual file exchange —
+live in pendant.induce.providers (D-016).
 """
 
 from __future__ import annotations
 
 import json
-import os
-import urllib.request
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol
 
 from pydantic import ValidationError
 
 from pendant.align.report import AlignmentReport
 from pendant.induce.prompt import build_prompt, build_retry_prompt
+from pendant.induce.providers import LLMProvider
 from pendant.induce.schema import InducedProcess
-
-
-class LLMProvider(Protocol):
-    name: str
-
-    def complete(self, prompt: str) -> str: ...
-
-
-class ReplayProvider:
-    """Deterministic provider for tests: returns canned responses in order."""
-
-    name = "replay"
-
-    def __init__(self, responses: list[str]) -> None:
-        self._responses = list(responses)
-
-    def complete(self, prompt: str) -> str:
-        if not self._responses:
-            raise RuntimeError("ReplayProvider exhausted")
-        return self._responses.pop(0)
-
-
-class AnthropicProvider:
-    """Minimal Anthropic Messages API client (stdlib only, D-009)."""
-
-    def __init__(self, model: str = "claude-sonnet-4-5", max_tokens: int = 16000) -> None:
-        self.name = f"anthropic:{model}"
-        self.model = model
-        self.max_tokens = max_tokens
-        self.api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-        if not self.api_key:
-            raise RuntimeError("ANTHROPIC_API_KEY is not set")
-
-    def complete(self, prompt: str) -> str:
-        payload = json.dumps(
-            {
-                "model": self.model,
-                "max_tokens": self.max_tokens,
-                "messages": [{"role": "user", "content": prompt}],
-            }
-        ).encode("utf-8")
-        request = urllib.request.Request(
-            "https://api.anthropic.com/v1/messages",
-            data=payload,
-            headers={
-                "content-type": "application/json",
-                "x-api-key": self.api_key,
-                "anthropic-version": "2023-06-01",
-            },
-        )
-        with urllib.request.urlopen(request, timeout=300) as response:
-            body = json.loads(response.read().decode("utf-8"))
-        return "".join(
-            block.get("text", "") for block in body.get("content", []) if isinstance(block, dict)
-        )
 
 
 class InductionFailed(Exception):

@@ -280,3 +280,38 @@ path.
 **Rejected.** Deferring all screenshots until `finalize` (loses
 mid-session reviewer evidence timing); ignoring the race as rare
 (severity 10, no waiver).
+
+## D-016 — Provider-agnostic induction backends
+
+**Decision.** `pendant/induce/providers.py` generalizes D-009 so any
+LLM can drive induction. `make_provider` builds one of:
+`AnthropicProvider` (Messages API); `OpenAICompatProvider` for any
+OpenAI-compatible `/chat/completions` endpoint (OpenAI, OpenRouter,
+local Ollama / LM Studio / vLLM, vendor compatibility endpoints);
+or `FileExchangeProvider`, a manual prompt/response file exchange for
+assistants without an inference API (e.g. Cursor: open the prompt
+file in the editor, save the model's raw JSON reply as the response
+file). The CLI exposes this as
+`--model [provider:]<model>` (`anthropic:`, `openai:`, `openrouter:`,
+`ollama:`, or the literal `file`) plus `--base-url`, `--api-key-env`,
+and `--exchange-dir`; a bare model name still means Anthropic, so
+existing invocations are unchanged. All backends remain stdlib-only.
+`OpenAICompatProvider` sends no token cap (the `max_tokens` /
+`max_completion_tokens` split differs across servers, and a truncated
+completion is unparseable JSON — the schema gate would burn retries on
+it); a missing API key is an error unless the endpoint host is local.
+
+**Rationale.** The engine's schema gate, reject-and-retry,
+cross-validation, and metrics are already provider-independent — the
+only provider-specific surface is prompt→text. Binding induction to
+one vendor would couple Gate 2 measurement to a single model family;
+the OpenAI-compatible wire format is the de-facto interop standard;
+and the file exchange covers editors and chat UIs without adding
+dependencies, while keeping the engine's retry loop intact (a
+rejected attempt simply becomes the next prompt file).
+
+**Rejected.** Vendor SDKs or a LiteLLM dependency (D-009's
+stdlib-only stance stands; readable artifacts over adapter stacks);
+driving Cursor's UI by automation to fake an API (fragile, opaque);
+changing the default away from Anthropic (silently breaks recorded
+workflows and the committed rehearsal tooling).

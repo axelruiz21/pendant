@@ -55,9 +55,16 @@ uv run pendant record --process orders --name "Order entry" --url https://exampl
 # Coverage (Good-Turing; never use raw run count for promotion)
 uv run pendant coverage --process orders
 
-# Align → induce (needs ANTHROPIC_API_KEY for a live model)
+# Align → induce (default model is Anthropic; needs ANTHROPIC_API_KEY)
 uv run pendant align --process orders --out alignment.json
 uv run pendant induce --process orders --save-envelope
+
+# Any other model works too (D-016): OpenAI-compatible endpoints,
+# local models, or a manual file exchange for assistants without an
+# API (e.g. Cursor — open the prompt file, save the JSON reply back)
+uv run pendant induce --process orders --model openai:gpt-5
+uv run pendant induce --process orders --model ollama:qwen3:32b
+uv run pendant induce --process orders --model file
 
 # Print the draft IR
 uv run pendant show --process orders
@@ -79,7 +86,7 @@ capture → store → align → induce → ir → (review) → (compile) → (ru
 | `capture/` | CDP recorder (Playwright + raw CDP); redaction before any disk write |
 | `store/` | SQLite + content-addressed blobs; Good-Turing promotion gate |
 | `align/` | Deterministic MSA (Needleman–Wunsch, affine gaps)—never an LLM |
-| `induce/` | Schema-constrained LLM; reject-and-retry; Gate 2 instrumentation |
+| `induce/` | Schema-constrained LLM, any provider (Anthropic, OpenAI-compatible, file exchange); reject-and-retry; Gate 2 instrumentation |
 | `ir/` | Pydantic v2 reliability contract: mandatory postconditions + finite timeouts |
 
 **Binding invariants** (never relaxed under schedule pressure): immutable evidence, deterministic alignment, in-collector redaction, identity-vector locators, no empty postconditions / unbounded waits, schema-validated LLM output. Full list: [CLAUDE.md](CLAUDE.md).

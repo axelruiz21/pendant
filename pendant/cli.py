@@ -19,7 +19,8 @@ from pendant.align import align_runs
 from pendant.capture.collector import Collector
 from pendant.capture.gate0 import render_report, run_gate0
 from pendant.capture.redaction import RedactionRegistry
-from pendant.induce.engine import AnthropicProvider, InductionFailed, induce, log_corrections
+from pendant.induce.engine import InductionFailed, induce, log_corrections
+from pendant.induce.providers import make_provider
 from pendant.ir.graph import render_text
 from pendant.store import Store
 
@@ -128,7 +129,13 @@ def cmd_induce(args: argparse.Namespace) -> int:
         for e in t.events
         if e.kind == "narration" and e.payload and e.payload.value_redacted
     ]
-    provider = AnthropicProvider(model=args.model)
+    exchange_dir = Path(args.exchange_dir) if args.exchange_dir else store.root / "induce_exchange"
+    provider = make_provider(
+        args.model,
+        base_url=args.base_url,
+        api_key_env=args.api_key_env,
+        exchange_dir=exchange_dir,
+    )
     metrics_path = store.root / "induce_metrics.jsonl"
     try:
         process, metrics = induce(report, narration, provider, metrics_path=metrics_path)
@@ -235,7 +242,20 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("induce", help="induce a draft process from aligned evidence")
     p.add_argument("--process", required=True)
-    p.add_argument("--model", default="claude-sonnet-4-5")
+    p.add_argument(
+        "--model",
+        default="claude-sonnet-4-5",
+        help="model spec: bare Anthropic model, 'anthropic:<m>', 'openai:<m>', "
+        "'openrouter:<m>', 'ollama:<m>', or 'file' (manual prompt/response "
+        "exchange for assistants without an API, e.g. Cursor)",
+    )
+    p.add_argument("--base-url", help="override the provider endpoint base URL")
+    p.add_argument("--api-key-env", help="name of the env var holding the API key")
+    p.add_argument(
+        "--exchange-dir",
+        help="directory for --model file prompt/response exchange "
+        "(default <store>/induce_exchange)",
+    )
     p.add_argument("--save-envelope", action="store_true")
     p.set_defaults(func=cmd_induce)
 

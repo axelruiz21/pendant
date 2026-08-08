@@ -10,12 +10,17 @@ invariant 10.
 """
 
 from pendant.induce.engine import (
-    AnthropicProvider,
     InductionFailed,
     InductionMetrics,
-    LLMProvider,
-    ReplayProvider,
     induce,
+)
+from pendant.induce.providers import (
+    AnthropicProvider,
+    FileExchangeProvider,
+    LLMProvider,
+    OpenAICompatProvider,
+    ReplayProvider,
+    make_provider,
 )
 from pendant.induce.schema import (
     ConditionalQuestion,
@@ -27,12 +32,15 @@ from pendant.induce.schema import (
 __all__ = [
     "AnthropicProvider",
     "ConditionalQuestion",
+    "FileExchangeProvider",
     "InducedProcess",
     "InducedStep",
     "InductionFailed",
     "InductionMetrics",
     "LLMProvider",
+    "OpenAICompatProvider",
     "PostconditionProposal",
     "ReplayProvider",
     "induce",
+    "make_provider",
 ]
